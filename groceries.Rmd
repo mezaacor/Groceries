@@ -18,6 +18,7 @@ library(datasets)
 library(rje)
 library(plyr)
 library(colorspace)
+options(warn=-1)
 ```
 
 ```{r,echo=FALSE,message=FALSE,warning=FALSE}
