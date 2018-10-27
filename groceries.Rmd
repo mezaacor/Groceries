@@ -1,0 +1,207 @@
+---
+title: "Association Rules project"
+datos: "Market Basket Analysis: Identifying Frequently-Purchased Groceries, Package Arules"
+author: "Ronny Meza"
+date: "Ocober 2018"
+output: html_document
+---
+\newpage
+```{r, echo=FALSE}
+1+1
+```
+Lybraries
+```{r}
+library(xlsx)
+library(arules)
+library (arulesViz)
+library(datasets)
+library(rje)
+library(plyr)
+library(colorspace)
+```
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+require(knitr)
+# Set so that long lines in R will be wrapped:
+opts_chunk$set(tidy.opts=list(width.cutoff=80),tidy=TRUE)
+```
+
+** Introduction **
+
+In these project will be illustrated how to use Arules for analyze a dataset has 1 month (30 days), of real points of sale from a typical grocery store. The dataset contain 9835 transactions and the elements are in 169 categories. In the present blog, it will aboard, different algorithm from the library Arules, with the goal to examine the data and to extract the consume trend rules and the associations between a group of products and other, out of what might be obvious to the owner of the grocery store.
+
+```{r}
+#Input data 
+groceries <- read.transactions("groceries.csv", sep = ",")
+```
+
+** Data Analizes **
+```{r}
+dim(groceries)  # 9835 169
+summary(groceries)
+```
+
+```{r}
+groceries[1:2,] # 
+```
+It can be see that the data are in Sparse format and that the different items are organized in 169 columns, but in this point it is not know ledged a data organization schema. The summary indicated that 9835 transactions are distributed a long of 169 columns. The products with major frequency content (consume) are: the whole milk, followed by vegetables, bakery products, then are located the sodas, and the yogurts; the rest of the products are included under others category.  
+
+** Checking the first 10 transactions **
+```{r}
+inspect(groceries[1:11])
+```
+Using this resource, it is possible to have a idea about data organization, note that the buy operation carry out by each individual is organized by rows; note that have not an specific order by column, each product appear in the order how it was register the buy.
+
+** Checking the buy frequency od different items **
+```{r}
+#Itemfrequency Checking
+itemFrequency(groceries[,1:20])
+max(itemFrequency(groceries[,1:20])) #Max. frequency
+```
+Note that under this search parameter it is difficult to have an idea about which product is purchased with major frequency in the first 20 columns. When evaluating the maximum it can be observed that water bottles are acquired quite frequently, which is very logical and does not provide information that the owner of the establishment does not know. However, this knowledge could mark a start point; it should that could be interesting the products there are sold as well as water bottles. 
+
+** Evaluation of itemsets with support major than 0.1 **
+```{r}
+itemFrequencyPlot(groceries, support = 0.1)
+```
+In the bar chart you can see that there are other products that are sold as well as water bottles, which appear first followed by: other vegetables, rolls and bread, tubers, soft drinks, tropical fruits, whole milk and yogurt.
+
+** Evaluation of purchase frequency of 30 principal product **
+```{r}
+itemFrequencyPlot(groceries, topN = 30, cex.names=0.8)
+```
+In the graph above you can see a bar chart that indicates in an organized way the most sold products in the grocery store, which are headed by whole milk, vegetables, rolls and bread, soda, yogurt, bottles of waters, tubers, tropical fruits, among others. However, the owner of the establishment knows very well the most sold products and knows that these products must be close to each other. Therefore, this study will focus on products that have a lower purchase frequency and could provide unknown information to the owner of the establishment.
+
+** Training a model with grocerie dataset **
+```{r}
+groceryrules <- apriori(groceries, parameter = list(support = 0.006, confidence = 0.25, minlen = 2))
+```
+** Performance evaluation of the Model **
+```{r}
+summary(groceryrules)
+```
+The summary indicates that 463 rules were built, which can be overwhelming, so the rules organized by support will be revised.
+
+```{r}
+inspect(sort(groceryrules, by = "support")[1:10])
+```
+In the table it can be seen that until now there is no new information, the vegetables, the whole milk, and the different products that appear listed in the bar graph are those that lead in order of position the table. In this sense, an interesting question would be, what do people who do not carry whole milk buy?
+
+For this, a boolean mark true or false in the rows will be added.
+
+```{r}
+# Data preparation
+compras<-as(groceries, "matrix") 
+
+# Removal of duplicates
+dim(compras)
+compras<-unique(compras)
+dim(compras) #se puede observar el efecto de la remocion de los datos redundantes
+
+# Cleaning NA values
+compras[is.na(compras)] <- FALSE
+
+# Preparation of vector negation for whole milk
+indice<-grep("whole milk", colnames(compras)) # columna de la leche entera
+milk<-compras[,indice]
+no_milk<-ifelse(milk==TRUE,FALSE,TRUE)
+
+compras_2<-cbind(compras, no_milk) #Nuevo arreglo con la columna no_milk
+compras_3<-subset(compras_2, select = -c(indice)) #remocion de la columna whole milk
+
+```
+Once the new data group is structured, the analysis is carried out again with * apriori *, but in this case an inspection of the data will be carried out where the consumers did not buy milk * (negation case). *
+
+```{r}
+negado<-apriori(compras_3, parameter=list(supp=0.001,conf = 0.08), 
+               appearance = list(default="lhs",rhs="no_milk"),
+               control = list(verbose=F))
+rules_nega<-sort(negado, decreasing=TRUE,by="confidence")
+options(digits=2)
+inspect(rules_nega[1:10])
+```
+In this case it can be observed that people who do not buy whole milk buy, note that the first elements of the list are mostly liqueurs such as brandy, wines (white and red), beer, etc.
+```{r}
+inspect(head(negado, subset = lhs %pin% "no_milk=TRUE"),n=10)
+
+```
+** Checking the rules **
+Because we know how the purchases are related in the descending order, we will proceed to list them in the opposite direction. 
+```{r}
+rules<-sort(groceryrules, by="confidence", decreasing=FALSE)[1:10]
+options(digits=2)
+inspect(rules)
+```
+When listing for confidence, some interesting rules appear, which involve the purchase of oil that produces the purchase of tubers, bottled water and other vegetables associated with the purchase of tropical fruits and other vegetables. Which would be the usual purchases of a group of people trying to eat healthy.
+```{r}
+rules2<-sort(groceryrules, by="lift", decreasing=TRUE)[1:10]
+options(digits=2)
+rules2<-sort(rules2, by="lift") 
+inspect(head(rules2, n=10))
+```
+When building the list considering * lift *, which is a measure of quality, if lift gives 1, it is that we have absolute independence, between 0 and 1 negative dependence, but if it is greater than 1, positive dependence and close to zero is that the result is reliable. In the 10 cases that have all been evaluated, they are greater than 1, which indicates that the dependence is positive. It can be seen that new rules appear, which are short, but still interesting. The purchase of herbs involves the purchase of turberculos, which could indicate that they are people who will prepare soups or tubers with some type of dressing, berries that involve the purchase of sour cream, this indicates the preparation of desserts, vegetables, tropical fruits , whole milk and tubers, this indicates that they are people who lead a healthy life.
+
+```{r}
+rules3<-apriori(groceries, parameter = list(supp = 0.001, conf = 0.8))[1:10]
+options(digits=2)
+inspect(rules3[1:10])
+```
+By evaluating a support greater than 0.001 and a confidence greater than 0.8, it is possible to explore a set of combinations of product purchases that are perhaps unknown to the owner of the grocery store, those who buy liquor and wines, tend to buy beer in bottles These products usually in spite of being in the same aisle of the supermarkets do not tend to be placed together.   
+
+```{r}
+rules4<-apriori(compras, parameter=list(supp=0.001,conf = 0.08), 
+               appearance = list(default="lhs",rhs="butter"),
+               control = list(verbose=F))
+rules4<-sort(rules4, decreasing=TRUE,by="confidence")
+options(digits=2)
+inspect(rules4[1:5])
+```
+When placing the butter option a series of interesting rules related to the purchase of butter with high * lift * values is produced, which indicates that there is a positive dependence. For this product it can be seen that the people who bought it had planned to make desserts [items 1,2,4,5] and sandwiches [item 3]
+
+```{r}
+
+rules5<-apriori(compras, parameter=list(supp=0.001,conf = 0.08), 
+               appearance = list(default="lhs",rhs="berries"),
+               control = list(verbose=F))
+rules5<-sort(rules5, decreasing=TRUE,by="confidence")
+options(digits=2)
+inspect(rules5[1:10])
+```
+In the case of the purchase of berries you can see a link with the purchase of pastry products, whipped cream, sour cream and milk, all items listed have high * lift * values which indicates that there is a positive dependence.
+
+Finally, in certain situations where lift is close to 1, but the counts are large; or lift is significantly different from 1, but the counts are low, we may need to move to the chi-square statistical test to prove that events A and B are statistically dependent (ie, we did not find a spurious correlation).
+
+Equipped with this knowledge, it will be necessary to evaluate which products tend to be complemented with high lift (that is, the purchase of a product would lead to the purchase of another with high probability) and which products tend to be substitutes:
+
+** Chi-square evaluation for Butter and Tropical Fruits **
+```{r}
+tabla<-crossTable(groceries, measure='chi')
+print("The Chi-square value for Butter and Tropical Fruits is:")
+tabla['tropical fruit', 'butter']
+```
+In fact, the low value of p for these two items, excludes the possibility that the lift value greater than 1 is due to chance.
+
+```{r}
+beef_rules = subset(rules5, items %in% c("beef","sausage"))
+inspect(sort(beef_rules, by = "lift")[1:10])
+```
+When extracting the relationship that exists between beef, sausages and berries, it can be observed that if there is an association with a lift greater than 1. In item [2], the beef appears, bread which implies the purchase of berries also you can see that other types of meat products appear, such as pork and chicken.
+
+** Display based on grouped matrix **
+```{r}
+plot(beef_rules, method="grouped", measure="confidence", 
+     control=list(col=sequential_hcl(100)))
+```
+The visualization based on the grouped matrix shows the different rules related to the purchase of berries, it can be observed that despite being a product that could go unnoticed; By placing this product as a consequence on the right, there are several products that link it with different types of consumer trends, such as dessert preparation, appetizers, part of the preparation of sauce to combine with main dishes such as meats, sausages and even as part of the list of products of people who lead a healthy lifestyle.
+
+** Graphics-based visualizations **
+```{r}
+plot(beef_rules, method="graph", control=list(type="items"))
+```
+In the graph above, you can see different types of products joined by different segments of arrows, whose consequence is the purchase of berries. The bubble graph shows the circumferences of beef, sausages and vegetables, which indicates that they are bought in greater proportion with respect to the other products. 
+
+** Display based on parallel coordinates **
+```{r}
+plot(beef_rules, method="paracoord", control=list(reorder=TRUE))
+```
+The graph of parallel coordinates, helps to visualize the sequence in which the different products are acquired whose final consequence is the purchase of berries. In the graphic, the following sequence stands out with a more intense red color: (sausages, sour or whipped cream, curd) involve the purchase of berries.
