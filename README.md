@@ -1,2 +1,0 @@
-# Groceries
-Association Rules project
