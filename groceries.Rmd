@@ -3,7 +3,7 @@ title: "Association Rules project"
 datos: "Market Basket Analysis: Identifying Frequently-Purchased Groceries, Package Arules"
 author: "Ronny Meza"
 date: "Ocober 2018"
-output: html_document
+output: pdf_document
 ---
 \newpage
 ```{r, echo=FALSE}
